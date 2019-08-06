@@ -331,6 +331,7 @@ int lept_parse(lept_value* v, const char* json) {
     if ((ret = lept_parse_value(&c, v)) == LEPT_PARSE_OK) {
         lept_parse_whitespace(&c);
         if (*c.json != '\0') {
+            lept_free(v);
             v->type = LEPT_NULL;
             ret = LEPT_PARSE_ROOT_NOT_SINGULAR;
         }
@@ -484,7 +485,7 @@ void lept_free(lept_value* v) {
                 free(v->u.o.m[i].k);
                 lept_free(&v->u.o.m[i].v);
             }
-            free(v->u.o.m);
+            if(v->u.o.capacity != 0) free(v->u.o.m);
             break;
         default: break;
     }
@@ -676,18 +677,26 @@ size_t lept_get_object_capacity(const lept_value* v) {
 void lept_reserve_object(lept_value* v, size_t capacity) {
     assert(v != NULL && v->type == LEPT_OBJECT);
     /* \todo */
-    if (v->u.o.capacity < capacity) {
+    if (v->u.o.capacity == 0){
+        v->u.o.m = (lept_member*)malloc(capacity * sizeof(lept_member));
         v->u.o.capacity = capacity;
+    }
+    else if (v->u.o.capacity < capacity) {
         v->u.o.m = (lept_member*)realloc(v->u.o.m, capacity * sizeof(lept_member));
+        v->u.o.capacity = capacity;
     }
 }
 
 void lept_shrink_object(lept_value* v) {
     assert(v != NULL && v->type == LEPT_OBJECT);
     /* \todo */
-    if (v->u.o.capacity > v->u.a.size) {
+    if (v->u.o.capacity > v->u.a.size && v->u.o.size != 0) {
         v->u.o.capacity = v->u.o.size;
         v->u.o.m = (lept_member*)realloc(v->u.o.m, v->u.o.capacity * sizeof(lept_member));
+    }
+    else if(v->u.o.size == 0 && v->u.o.capacity != 0){
+        free(v->u.o.m);
+        v->u.o.capacity = 0;
     }
 }
 
@@ -700,8 +709,6 @@ void lept_clear_object(lept_value* v) {
         lept_free(&v->u.o.m[i].v);
     }
     v->u.o.size = 0;
-    //
-
 }
 
 const char* lept_get_object_key(const lept_value* v, size_t index) {
@@ -753,6 +760,6 @@ void lept_remove_object_value(lept_value* v, size_t index) {
     /* \todo */
     free(v->u.o.m[index].k);
     lept_free(&(v->u.o.m[index].v));
-    memmove(&v->u.o.m[index], &v->u.o.m[index+1], sizeof(lept_member)*(v->u.o.size-index+1));
+    memmove(&v->u.o.m[index], &v->u.o.m[index+1], sizeof(lept_member)*(v->u.o.size-index-1));
     v->u.o.size--;
 }
